@@ -38,10 +38,15 @@ def get_hospitals():
     );
     out body;
     """
-    overpass_response = requests.post(overpass_url, data=query)
-    overpass_data = overpass_response.json()
-
-    hospitals = []
+    try:
+        overpass_response = requests.post(overpass_url, data=query, timeout=25)
+        overpass_data = overpass_response.json()
+    
+    except Exception:
+        overpass_data = {"elements": []}
+        hospitals = []
+    
+    
     for element in overpass_data.get("elements", []):
         name = element.get("tags", {}).get("name", "Unknown Facility")
         hospitals.append({
