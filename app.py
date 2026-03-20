@@ -1,12 +1,10 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-from groq import Groq
+import os
 
 app = Flask(__name__)
 
-# Paste your Groq API key here
-GROQ_API_KEY = "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"
-client = Groq(api_key=GROQ_API_KEY)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 
 @app.route("/")
 def home():
@@ -53,7 +51,7 @@ def get_hospitals():
             "type": element["tags"].get("amenity", "hospital")
         })
 
-    # Step 3: Find desert zones (grid analysis)
+    # Step 3: Find desert zones
     desert_zones = find_desert_zones(lat, lon, hospitals)
 
     # Step 4: Ask AI for recommendations
@@ -70,28 +68,21 @@ def get_hospitals():
 
 
 def find_desert_zones(center_lat, center_lon, hospitals):
-    """
-    Divides city into a grid and finds zones
-    with no hospital within 3km
-    """
     import math
-
     desert_zones = []
-    grid_size = 0.03  # roughly 3km per cell
+    grid_size = 0.03
 
-    # Create a 5x5 grid around city center
     for i in range(-2, 3):
         for j in range(-2, 3):
             grid_lat = center_lat + (i * grid_size)
             grid_lon = center_lon + (j * grid_size)
 
-            # Check if any hospital is within 3km of this grid point
             has_hospital = False
             for h in hospitals:
                 dist = math.sqrt(
                     (h["lat"] - grid_lat) ** 2 +
                     (h["lon"] - grid_lon) ** 2
-                ) * 111  # convert to km
+                ) * 111
 
                 if dist < 3:
                     has_hospital = True
@@ -108,13 +99,9 @@ def find_desert_zones(center_lat, center_lon, hospitals):
 
 
 def get_ai_recommendation(city, hospital_count, desert_zones):
-    """
-    Asks Groq AI to analyze the data and give recommendations
-    """
     desert_count = len(desert_zones)
 
-    prompt = f"""
-You are a senior healthcare infrastructure analyst for Indian cities.
+    prompt = f"""You are a senior healthcare infrastructure analyst for Indian cities.
 
 Data:
 - City: {city}
@@ -127,17 +114,28 @@ Line 2: Which type of areas are likely affected (outskirts, slums, industrial zo
 Line 3: Estimated population at risk (calculate roughly based on average Indian urban density of 10,000 people per sq km and 3km radius zones)
 Line 4: Specific government action with exact facility type (PHC, CHC, mobile unit) and urgency level
 
-Be specific to {city}'s geography. No bullet points. No headings. Just 4 direct sentences. Max 100 words.
-"""
+Be specific to {city}'s geography. No bullet points. No headings. Just 4 direct sentences. Max 100 words."""
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=150
-    )
-
-    return response.choices[0].message.content
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200
+            },
+            timeout=30
+        )
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"AI analysis unavailable. City: {city} has {hospital_count} facilities and {desert_count} desert zones detected."
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
