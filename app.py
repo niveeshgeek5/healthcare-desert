@@ -30,31 +30,40 @@ def get_hospitals():
     # Step 2: Fetch real hospitals
     overpass_url = "https://overpass-api.de/api/interpreter"
     query = f"""
-    [out:json];
-    (
-      node["amenity"="hospital"](around:20000,{lat},{lon});
-      node["amenity"="clinic"](around:20000,{lat},{lon});
-      node["amenity"="doctors"](around:20000,{lat},{lon});
-    );
-    out body;
-    """
+[out:json][timeout:40];
+(
+  node["amenity"="hospital"](around:20000,{lat},{lon});
+  node["amenity"="clinic"](around:20000,{lat},{lon});
+  node["amenity"="doctors"](around:20000,{lat},{lon});
+);
+out body;
+"""
+
+    # Initialize hospitals list BEFORE try block
+    hospitals = []
+
     try:
-        overpass_response = requests.post(overpass_url, data=query, timeout=45)
-        overpass_data = overpass_response.json()
-    
-    except Exception:
-        overpass_data = {"elements": []}
+        overpass_response = requests.post(
+            overpass_url,
+            data=query,
+            timeout=45,
+            headers={"User-Agent": "HealthcareDesertDetector/1.0"}
+        )
+        if overpass_response.status_code == 200:
+            overpass_data = overpass_response.json()
+            for element in overpass_data.get("elements", []):
+                name = element.get("tags", {}).get("name", "Unknown Facility")
+                hospitals.append({
+                    "name": name,
+                    "lat": element["lat"],
+                    "lon": element["lon"],
+                    "type": element["tags"].get("amenity", "hospital")
+                })
+        print(f"City: {city} | Hospitals found: {len(hospitals)} | Status: {overpass_response.status_code}")
+
+    except Exception as e:
+        print(f"Overpass API error for {city}: {e}")
         hospitals = []
-    
-    
-    for element in overpass_data.get("elements", []):
-        name = element.get("tags", {}).get("name", "Unknown Facility")
-        hospitals.append({
-            "name": name,
-            "lat": element["lat"],
-            "lon": element["lon"],
-            "type": element["tags"].get("amenity", "hospital")
-        })
 
     # Step 3: Find desert zones
     desert_zones = find_desert_zones(lat, lon, hospitals)
@@ -138,6 +147,7 @@ Be specific to {city}'s geography. No bullet points. No headings. Just 4 direct 
         result = response.json()
         return result["choices"][0]["message"]["content"]
     except Exception as e:
+        print(f"Groq API error: {e}")
         return f"AI analysis unavailable. City: {city} has {hospital_count} facilities and {desert_count} desert zones detected."
 
 
