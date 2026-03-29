@@ -39,7 +39,7 @@ def get_hospitals():
     out body;
     """
     try:
-        overpass_response = requests.post(overpass_url, data=query, timeout=25)
+        overpass_response = requests.post(overpass_url, data=query, timeout=45)
         overpass_data = overpass_response.json()
     
     except Exception:
@@ -133,7 +133,7 @@ Be specific to {city}'s geography. No bullet points. No headings. Just 4 direct 
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 200
             },
-            timeout=30
+            timeout=45
         )
         result = response.json()
         return result["choices"][0]["message"]["content"]
